@@ -22,8 +22,9 @@ AI 开源生态爆发式增长，GitHub 上每天都有新的 Agent、Tool、Fra
 - **智能过滤** — 20+ 关键词匹配引擎，自动排除 fork，精准识别 AI skill/agent/tool
 - **结构化摘要** — 自动从 README 和仓库元数据中提取 features、use cases、category、tech stack
 - **9 大分类** — Agents & Orchestration、Inference & Serving、Training & Fine-tuning、RAG & Search 等
+- **三维度排名** — 自动生成 Top 20 排行榜：总 star 数、近 3 月增长、近 1 月增长
 - **增量更新** — 内置缓存机制，仅处理新增或更新的仓库，避免重复拉取
-- **多种输出格式** — JSON 目录、Markdown 表格、按分类过滤查看
+- **多种输出格式** — JSON 目录、Markdown 表格、排名目录、按分类过滤查看
 - **目录合并** — 支持多次搜索结果去重合并
 - **LLM 增强就绪** — 预留 Claude API 集成点，可一键升级为高质量 LLM 摘要
 
@@ -83,7 +84,12 @@ discovering-github-skills/
 ├── skills_catalog.json             # 示例输出：300 个已发现的 skill（按 star 降序）
 ├── .github_skills_cache.json       # 增量缓存（自动生成）
 ├── scripts/
-│   └── discover_skills.py          # 核心脚本：5 个子命令
+│   └── discover_skills.py          # 核心脚本：6 个子命令
+├── rankings/                       # 排行榜目录（自动生成）
+│   ├── by_total_stars.json         # Top 20 按总 star 数
+│   ├── by_growth_3m.json           # Top 20 按近 3 月 star 增长
+│   ├── by_growth_1m.json           # Top 20 按近 1 月 star 增长
+│   └── README.md                   # 排行榜 Markdown 汇总
 └── references/
     ├── advanced-config.md           # 进阶配置：关键词定制、LLM 集成、CI/CD、向量库
     └── troubleshooting.md           # 常见问题：限流、认证、空结果、编码等
@@ -100,6 +106,9 @@ discovering-github-skills/
 | 摘要 | `_extract_features()` | 从 README 提取功能列表 |
 | 摘要 | `_categorize()` | 9 大分类自动归类 |
 | 摘要 | `_guess_tech_stack()` | 从 README/topics 推断技术栈 |
+| 排名 | `count_stars_after_date()` | 二分搜索 stargazers API 计算 star 增长 |
+| 排名 | `compute_growth_for_repos()` | 批量计算 Top N 仓库的 1 月/3 月增长 |
+| 排名 | `generate_rankings()` | 生成三组 Top 20 排行榜 + Markdown 汇总 |
 | 缓存 | `load_cache()` / `save_cache()` | JSON 缓存读写 |
 
 ## 快速开始
@@ -141,11 +150,12 @@ python scripts/discover_skills.py discover \
 ### 子命令总览
 
 ```
-discover    核心流程：抓取 → 过滤 → 摘要 → 输出
+discover    核心流程：抓取 → 过滤 → 摘要 → 增长计算 → 排行榜 → 输出
 summary     查看已有目录的分类概览
 filter      按分类或关键词过滤
 export-md   导出 Markdown 表格
 merge       合并两个目录（自动去重）
+rankings    从已有目录生成三组 Top 20 排行榜
 ```
 
 ### 1. discover — 全量发现
@@ -228,6 +238,27 @@ python scripts/discover_skills.py discover --query "topic:agent" --pages 2 --out
 # 合并去重
 python scripts/discover_skills.py merge llm_skills.json agent_skills.json --output merged.json
 ```
+
+### 6. rankings — 生成排行榜
+
+```bash
+# 从已有目录生成三组 Top 20 排行榜（默认取 Top 100 计算增长）
+python scripts/discover_skills.py rankings skills_catalog.json
+
+# 自定参数
+python scripts/discover_skills.py rankings skills_catalog.json --top-n 50 --rankings-dir my_rankings
+```
+
+输出目录结构：
+```
+rankings/
+├── by_total_stars.json   # Top 20 按总 star 数排序
+├── by_growth_3m.json     # Top 20 按近 3 月 star 增长排序
+├── by_growth_1m.json     # Top 20 按近 1 月 star 增长排序
+└── README.md             # 三组排行榜的 Markdown 汇总表格
+```
+
+**Star 增长计算原理**：通过二分搜索 GitHub Stargazers API（带时间戳），在 O(log N) 次 API 调用内定位截止日期对应的分页位置，精确统计增长数。每个仓库约需 18 次 API 调用（2 个截止日期 × 9 次二分），仅对 Top N 仓库计算以控制 API 配额。
 
 ## 输出格式
 

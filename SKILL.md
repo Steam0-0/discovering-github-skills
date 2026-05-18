@@ -10,7 +10,7 @@ dependencies: [requests>=2.28.0, PyYAML>=6.0]
 
 # Discovering GitHub Skills
 
-Discovers high-star GitHub repositories that are AI skills/agents/tools and generates structured summaries with one-sentence descriptions, feature lists, use cases, and tech stack.
+Discovers high-star GitHub repositories that are AI skills/agents/tools and generates structured summaries with one-sentence descriptions, feature lists, use cases, and tech stack. Automatically produces three **Top 20 rankings** — by total stars, by 3-month star growth, and by 1-month star growth — in a `rankings/` directory with JSON and Markdown output.
 
 ## Quick start
 
@@ -19,9 +19,16 @@ Discovers high-star GitHub repositories that are AI skills/agents/tools and gene
 # Set your GitHub token (required to avoid rate limits)
 export GITHUB_TOKEN="your_token_here"
 
-# Run discovery pipeline — fetches repos, filters skills, generates summaries
-python scripts/discover_skills.py --min-stars 1000 --pages 3 --output skills_catalog.json
+# Run discovery pipeline — fetches repos, filters skills, generates summaries + rankings
+python scripts/discover_skills.py discover --min-stars 1000 --pages 3 --output skills_catalog.json
 ```
+
+This produces:
+- `skills_catalog.json` — full catalog with growth data
+- `rankings/by_total_stars.json` — Top 20 by total star count
+- `rankings/by_growth_3m.json` — Top 20 by 3-month star growth
+- `rankings/by_growth_1m.json` — Top 20 by 1-month star growth
+- `rankings/README.md` — human-readable Markdown summary of all three rankings
 
 ## Common workflows
 
@@ -48,29 +55,29 @@ export GITHUB_TOKEN="your_token_here"
 **Step 2: Run discovery script**
 
 ```bash
-# Fetch top 300 repos (3 pages x 100), filter for AI skills, output JSON
-python scripts/discover_skills.py \
+# Fetch top 300 repos (3 pages x 100), filter for AI skills, output JSON + rankings
+python scripts/discover_skills.py discover \
   --min-stars 1000 \
   --pages 3 \
   --output skills_catalog.json \
   --keywords "agent,ai,skill,tool,automation,assistant,llm,mlops,inference,training"
 ```
 
-**Step 3: Review and filter results**
+**Step 3: Review rankings**
 
 ```bash
-# Quick summary of discovered skills
-python scripts/discover_skills.py --summary skills_catalog.json
+# View the Markdown rankings summary
+cat rankings/README.md
 
-# Filter by category
-python scripts/discover_skills.py --filter skills_catalog.json --category "inference"
+# Or regenerate rankings from an existing catalog (without re-fetching)
+python scripts/discover_skills.py rankings skills_catalog.json --top-n 100
 ```
 
 **Step 4: Generate final catalog**
 
 ```bash
 # Export as Markdown table for documentation
-python scripts/discover_skills.py --export-md skills_catalog.json --output SKILLS_TABLE.md
+python scripts/discover_skills.py export-md skills_catalog.json --output SKILLS_TABLE.md
 ```
 
 ### Workflow 2: Targeted search by topic
@@ -153,8 +160,9 @@ python scripts/discover_skills.py \
 **Use this when:**
 - Building a curated directory of AI/ML tools from GitHub
 - Generating structured summaries for a skill marketplace or catalog
-- Discovering trending open-source AI projects above a star threshold
+- Discovering trending open-source AI projects by star growth
 - Creating input data for a vector DB or semantic search system
+- Comparing AI projects by momentum (recent star growth) vs total popularity
 
 **Use GitHub trending page instead when:**
 - You just want a quick glance at what's popular today
@@ -190,6 +198,31 @@ Some repos use `master` instead of `main`, or have no README. The script tries b
 The script excludes forks by default (`--exclude-forks`, on by default). To include them:
 ```bash
 python scripts/discover_skills.py --include-forks
+```
+
+## Star growth rankings
+
+The `discover` command and `rankings` subcommand automatically generate three Top-20 rankings in a `rankings/` directory:
+
+| File | Sorting | Description |
+|------|---------|-------------|
+| `by_total_stars.json` | Total star count | All-time most popular projects |
+| `by_growth_3m.json` | Stars gained in last 90 days | Projects with the most momentum over a quarter |
+| `by_growth_1m.json` | Stars gained in last 30 days | Currently trending projects |
+
+Growth is computed by binary-searching the GitHub stargazers API (with timestamps) to count how many stars were gained after each cutoff date. This requires ~9 API calls per repo per cutoff date (log₂ of accessible pages), and is only computed for the top N repos (default 100) to stay within API rate limits.
+
+**Regenerate rankings from an existing catalog:**
+```bash
+python scripts/discover_skills.py rankings skills_catalog.json --top-n 50 --rankings-dir my_rankings
+```
+
+**Customize during discovery:**
+```bash
+python scripts/discover_skills.py discover \
+  --rank-top-n 50 \
+  --rankings-dir custom_rankings \
+  --pages 3
 ```
 
 ## Advanced topics
